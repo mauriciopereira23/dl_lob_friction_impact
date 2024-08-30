@@ -36,7 +36,7 @@ The next steps follow the same numeric order as the directories in this reposito
 
 ### 4. File extraction
 
-The script expects order book and message files to be extracted (they come zipped from LOBSTER) and put into the data root directory in the directory `input`. The files should be divided into subdirectories for each ticker, for example `data_root/input/TICKER1`, `data_root/input/TICKER2`, etc. The notebook [pipelines/4_file_extraction/file_management.ipynb](pipelines/4_file_extraction/file_management.ipynb) helps in this step.
+The script expects order book and message files to be extracted (they come zipped from LOBSTER) and put into the data root directory, in the directory `input`. The files should be divided into subdirectories for each ticker, for example `data_root/input/TICKER1`, `data_root/input/TICKER2`, etc. The notebook [pipelines/4_file_extraction/file_management.ipynb](pipelines/4_file_extraction/file_management.ipynb) helps in this step.
 
 ### 5. Data generation
 
