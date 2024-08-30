@@ -1,28 +1,16 @@
 import argparse
 import os
-
-# load packages
-import pandas as pd
 import pickle
 import numpy as np
-import matplotlib
-
 from datetime import datetime
-from tqdm import tqdm
-from sklearn.metrics import accuracy_score, classification_report
+from sklearn.metrics import classification_report
 
 import torch
 import torch.nn.functional as F
 from torch.utils import data
-from torchinfo import summary
 import torch.nn as nn
-import torch.optim as optim
-from torch import nn, einsum
 import torch.nn.functional as F
-from tcn import TemporalConvNet
 from torch.utils.data import WeightedRandomSampler
-from einops import rearrange, repeat
-from einops.layers.torch import Rearrange
 from model import DTNN
 
 import random
@@ -35,6 +23,13 @@ import time
 def read_args():
     parser = argparse.ArgumentParser()
     parser.add_argument(
+        "--data_root",
+        type=str,
+        required = True,
+        help = """(str) Directory where the data files will be written. Should also contain a 
+        directory named 'input', with orderbook and message files in separated directories for each ticker.""",
+    )
+    parser.add_argument(
         "--device",
         type=int,
         required = True,
@@ -45,7 +40,7 @@ def read_args():
         type=str,
         nargs='+',
         required = True,
-        help = "(list[str]) List of tickers.",
+        help = "(list[str]) List of tickers to generated predictions for..",
     )
     parser.add_argument(
         "--horizons",
@@ -76,9 +71,6 @@ def get_sampler(label):
     sampler=WeightedRandomSampler(weights,3)
     return sampler
 
-
-
-
 def prepare_x(data, NF, sequence_stride):
     # df1 = data[:40, :].T
     df1 = data[::sequence_stride,:NF].copy()
@@ -90,7 +82,6 @@ def prepare_x(data, NF, sequence_stride):
 def get_label(data, n_labels, sequence_stride):
     lob = data[::sequence_stride,-n_labels:]
     return lob
-
 
 def data_classification(X, Y, T):
     [N, D] = X.shape
@@ -106,16 +97,12 @@ def data_classification(X, Y, T):
 
     return dataX, dataY
 
-
 def torch_data(x, y):
     x = torch.from_numpy(x)
     x = torch.unsqueeze(x, 1)
     y = torch.from_numpy(y)
     y = F.one_hot(y, num_classes=3)
     return x, y
-
-
-
 
 class Dataset(data.Dataset):
     """Characterizes a dataset for PyTorch"""
@@ -168,7 +155,7 @@ def batch_gd(model, criterion, optimizer, train_loader, test_loader, epochs, che
             optimizer.step()
             train_loss.append(loss.item())
         # Get train loss and test loss
-        train_loss = np.mean(train_loss)  # a little misleading
+        train_loss = np.mean(train_loss) 
 
         model.eval()
         test_loss = []
@@ -255,7 +242,7 @@ def main():
 
     ## Hardcoded params - start ##
 
-    ROOT_DIR = "/home/mp422/data_processing"
+    ROOT_DIR = params["data_root"]
     Ws = params["windows"]
     
     model_list = ["DTNN"]
@@ -304,9 +291,7 @@ def main():
         os.makedirs(model_filepath, exist_ok=True)
         
         # set local parameters
-        features = features_list[m]
         model_inputs = model_inputs_list[m]
-        levels = levels_list[m]
 
         feature_type = model_inputs[:-1] + "_features"
         if model_inputs == "volumes_L3":
@@ -379,17 +364,8 @@ def main():
                             "test": [os.path.join(data_dir, file) for date in test_dates for file in file_list if date in file]
                         }
 
-                        # print("getting alphas...")
-                        # alphas, distributions = get_alphas(returns_files["train"], orderbook_updates)
-                        # pickle.dump(alphas, open(os.path.join(window_filepath, "alphas.pkl"), "wb"))
-                        # pickle.dump(distributions, open(os.path.join(window_filepath, "distributions.pkl"), "wb"))
-                        # imbalances = distributions.to_numpy()
                         alphas = np.zeros(n_horizons)
-    
-                        
-                        # val_distributions = get_class_distributions(returns_files["val"], alphas, orderbook_updates)
-                        # pickle.dump(val_distributions, open(os.path.join(window_filepath, "val_distributions.pkl"), "wb"))
-                        
+
                         for test_label in label_dict["test_labels"]:
             
                             test_returns_data_dir = os.path.join(ROOT_DIR, "data", TICKER, test_label)
@@ -399,9 +375,6 @@ def main():
 
                             returns_files["test"] = [os.path.join(test_returns_data_dir, file) for date in test_dates for file in test_returns_file_list if date in file]
 
-                            # test_distributions = get_class_distributions(returns_files["test"], alphas, orderbook_updates)
-                            # pickle.dump(test_distributions, open(os.path.join(window_filepath + "test_distributions.pkl"), "wb"))
-                        
                             # iterate through horizons
                             for horizon in params["horizons"]:
                                 start_time = time.time()
@@ -411,9 +384,6 @@ def main():
                                 checkpoint_filepath = os.path.join(results_filepath, "weights")
                                 os.makedirs(results_filepath, exist_ok=True)
                     
-                                train_data_list = []
-                                val_data_list = []
-                                test_data_list = []
                     
                                 dec_train = create_dataset(paths=files["train"], feature_type=feature_type, alphas=alphas, label=train_val_label)
                                 dec_val = create_dataset(paths=files["val"], feature_type=feature_type, alphas=alphas, label=train_val_label)
@@ -427,17 +397,7 @@ def main():
                                 train_loader = torch.utils.data.DataLoader(dataset=dataset_train, batch_size=batch_size, shuffle=True)
                                 val_loader = torch.utils.data.DataLoader(dataset=dataset_val, batch_size=batch_size, shuffle=True)
                                 test_loader = torch.utils.data.DataLoader(dataset=dataset_test, batch_size=batch_size, shuffle=True)
-                    
-                                # print(dataset_train.x.shape, dataset_train.y.shape)
-                    
-                                # tmp_loader = torch.utils.data.DataLoader(dataset=dataset_train, batch_size=1, shuffle=True)
-                                # for x, y in tmp_loader:
-                                #     print(x)
-                                #     print(y)
-                                #     print(x.shape, y.shape)
-                                #     break
-                    
-                                # print(dataset_train.x.shape)
+                
                                 
                                 model = DTNN(time_slices=dataset_train.x.shape[1], num_classes=3, dim=dataset_train.x.shape[2],
                                                 depth=depth, heads=32, mlp_dim=2 * dataset_train.x.shape[2])
@@ -446,8 +406,6 @@ def main():
                     
                                 print("Model device:")
                                 print(next(model.parameters()).device)
-                                
-                                # print(summary(model, [1, 100, 60]))
                     
                                 criterion = nn.CrossEntropyLoss()
                                 optimizer = torch.optim.Adam(model.parameters(), lr=LR)

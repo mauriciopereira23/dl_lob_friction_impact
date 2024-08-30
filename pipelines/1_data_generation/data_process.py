@@ -69,10 +69,6 @@ def multiprocess_orderbooks(TICKER, input_path, output_path, log_path, stats_pat
 
     print("finished multiprocessing")
 
-    # with open(log_path + "/processing_logs.txt", "w") as f:
-    #     for log in logs:
-    #         f.write(log + "\n")
-
     print("please check processing logs.")
 
 
@@ -263,13 +259,6 @@ def process_orderbook(orderbook_name, TICKER, output_path, stats_path, NF_volume
     orderbook_states = df_orderbook_full[orderbook_feature_names]
     orderbook_states_prices = orderbook_states.values[:, ::2]
     orderbook_states_volumes = orderbook_states.values[:, 1::2]
-
-    # volumes = np.zeros((len(df_orderbook_full), NF_volume))
-
-    # for i in range(NF_volume):
-    #     # match tick prices with prices in levels of orderbook
-    #     flags = (orderbook_states_prices == np.repeat(ticks[:, i].reshape((len(orderbook_states_prices), 1)), orderbook_states_prices.shape[1], axis=1))
-    #     volumes[flags.sum(axis=1) > 0, i] = orderbook_states_volumes[flags]
 
     prices_dict = {}
     
@@ -517,134 +506,3 @@ def process_orderbook(orderbook_name, TICKER, output_path, stats_path, NF_volume
     orderflow_stats.to_csv(os.path.join(stats_path, TICKER + '_orderflow_stats_' + str(date.date()) + '.csv'))
 
     return log + orderbook_name + ' completed.'
-
-def aggregate_stats(TICKER, stats_path, features=["orderbook", "orderflow"]):
-    """
-    Function for aggregating processed features (e.g. orderbook and orderflow)
-    :param TICKER: the TICKER to be considered, str
-    :param stats_path: the path where daily stats are saved, str
-    :param features: features for which to aggregate stats, list of str
-    """
-    csv_file_list = glob.glob(os.path.join(stats_path, "*.{}".format("csv")))
-
-    for feature in features:
-        feature_stats = {datetime.strptime(re.search(r'\d{4}-\d{2}-\d{2}', name).group(), '%Y-%m-%d').date(): pd.read_csv(name, index_col=0) for name in csv_file_list if feature in name and re.search(r'\d{4}-\d{2}-\d{2}', name) is not None}
-    
-        feature_stats = dict(sorted(feature_stats.items()))
-    
-        aggregated_feature_stats = pd.concat(feature_stats, names=['Date'])
-
-        aggregated_feature_stats.index = aggregated_feature_stats.index.rename('stat', level=1)
-
-        aggregated_feature_stats.to_csv(os.path.join(stats_path, TICKER + '_' + feature + '_stats.csv'))
-        
-        
-def percentiles_features(TICKER, processed_data_path, stats_path, percentiles, features=["orderbook", "orderflow", "volume"], levels = 10, NF_volume = 40):
-    """
-    Function for summarizing percentiles of features once data has been processed.
-    :param TICKER: the TICKER to be considered, str
-    :param processed_data_path: the path where the processed data is stored, str
-    :param stats_path: the path where stats are to be saved, str
-    :param percentiles: the percentiles to be computed, list or np.array
-    :param features: features for which to compute daily stats, list of str
-    :param levels: number of levels which are stored in the npz files, int
-    :param NF_volume: number of features for volume representation, only used if volume in features
-    """
-    npz_file_list = sorted(glob.glob(os.path.join(processed_data_path, "*.{}".format("npz"))))
-    
-    for feature in features:
-        # add in feature names
-        feature_names = []
-        if feature == "orderbook":
-            feature_names_raw = ["ASKp", "ASKs", "BIDp", "BIDs"]
-            for i in range(1, levels + 1):
-                for j in range(4):
-                    feature_names += [feature_names_raw[j] + str(i)]
-        elif feature == "orderflow":
-            feature_names_raw = ["ASK_OF", "BID_OF"]
-            for i in range(1, levels + 1):
-                for feature_name in feature_names_raw:
-                    feature_names += [feature_name + str(i)]
-        elif feature == "volume":
-            queue_depths_names = []
-            for i in range(NF_volume//2, 0, -1):
-                feature_names += ["BIDv" + str(i)]
-                queue_depths_names += ["BIDq" + str(i)]
-            for i in range(1, NF_volume//2 + 1):
-                feature_names += ["ASKv" + str(i)]
-                queue_depths_names += ["ASKq" + str(i)]
-        
-        daily_stats_dfs = {}
-        feature_matrix_all = np.array([]).reshape(0, len(feature_names))
-        if feature == "volume":
-            queue_depths_all = np.array([]).reshape(0, len(queue_depths_names))
-            daily_queue_depths_stats_dfs = {}
-
-        for file in npz_file_list:
-            date = datetime.strptime(re.search(r'\d{4}-\d{2}-\d{2}', file).group(), '%Y-%m-%d').date()
-            print(date)
-            with np.load(file) as data:
-                feature_matrix = data[feature + "_features"]
-            try:
-                if feature == "volume":
-                    # first compute stats related to queue depth
-                    queue_depths = (feature_matrix > 0).sum(axis=-1)
-                    percentiles_queue_depths = np.percentile(queue_depths, percentiles, axis=0)
-                    daily_queue_depths_stats_dfs[date]= pd.DataFrame(percentiles_queue_depths, index = percentiles, columns = queue_depths_names)
-                    queue_depths_all = np.concatenate([queue_depths_all, queue_depths], axis=0)
-                    # then aggregate volumes to apply quartile stats as for orderbook and orderflow
-                    feature_matrix = feature_matrix.sum(axis=-1)
-                percentiles_features = np.percentile(feature_matrix, percentiles, axis=0)
-                daily_stats_dfs[date]= pd.DataFrame(percentiles_features, index = percentiles, columns = feature_names)
-                feature_matrix_all = np.concatenate([feature_matrix_all, feature_matrix], axis=0)
-            except:
-                print('The following date was skipped: ' + date.strftime("%d-%m-%Y"))
-                continue
-        percentiles_features_all = np.percentile(feature_matrix_all, percentiles, axis=0)
-        daily_stats_dfs["all"] = pd.DataFrame(percentiles_features_all, index = percentiles, columns = feature_names)
-        stats_df = pd.concat(daily_stats_dfs, names = ['Date'])
-        stats_df.to_csv(os.path.join(stats_path, TICKER + '_' + feature + '_percentiles.csv'))
-        if feature == "volume":
-            percentiles_queue_depths_all = np.percentile(queue_depths_all, percentiles, axis=0)
-            daily_queue_depths_stats_dfs["all"] = pd.DataFrame(percentiles_queue_depths_all, index = percentiles, columns = queue_depths_names)
-            queue_depths_stats_df = pd.concat(daily_queue_depths_stats_dfs, names = ['Date'])
-            queue_depths_stats_df.to_csv(os.path.join(stats_path, TICKER + '_queue_depth_percentiles.csv'))
-
-def dependence_responses(TICKER, processed_data_path, results_path, stats_path, horizons=[10, 20, 30, 50, 100, 200, 300, 500, 1000], k=10):
-    """
-    Function for summarizing dependence of responses.
-    :param TICKER: the TICKER to be considered, str
-    :param processed_data_path: the path where the processed data is stored, str
-    :param results_path: the path where the results are stored, str
-    :param stats_path: the path where stats are to be saved, str
-    :param horizons: the horizons at which the responses are defined, list/np.array
-    :param k: smoothing window for averaging prices in return definition, int
-    """
-    npz_file_list = sorted(glob.glob(os.path.join(processed_data_path, "*.{}".format("npz"))))
-
-    daily_dfs = {}
-    for w in range(11):
-        with open(os.path.join(results_path, TICKER, "W" + str(w), "alphas.pkl"), 'rb') as f:
-            alphas = pickle.load(f)
-        with open(os.path.join(results_path, TICKER, "W" + str(w), "val_train_test_dates.pkl"), 'rb') as f:
-            dates = pickle.load(f)
-        npz_file_list_window = [file for file in npz_file_list if re.search(r'\d{4}-\d{2}-\d{2}', file).group() in dates[0] + dates[1] + dates[2]]
-        for file in npz_file_list_window:
-            date = datetime.strptime(re.search(r'\d{4}-\d{2}-\d{2}', file).group(), '%Y-%m-%d').date()
-            print(date)
-            with np.load(file) as data:
-                responses = data['mid_returns']
-            horizon_dfs = {}
-            for h, horizon in enumerate(horizons):
-                labels = (+1)*(responses[:, h]>=-alphas[h]) + (+1)*(responses[:, h]>alphas[h]) - 1
-                horizon_dfs[horizon] = pd.DataFrame(confusion_matrix(labels[:-horizon-k//2], labels[horizon+k//2:]), index = ["down", "stationary", "up"], columns = ["down", "stationary", "up"])
-            daily_dfs[date] = pd.concat(horizon_dfs, names = ['horizon'])
-    full_df = pd.concat(daily_dfs, names = ['Date'])
-    full_df.to_csv(os.path.join(stats_path, TICKER + '_dependence_responses.csv'))
-    
-
-if __name__ == "__main__":
-    dependence_responses("LILAK", 
-                         "data/LILAK", 
-                         "results",
-                         "data/stats")

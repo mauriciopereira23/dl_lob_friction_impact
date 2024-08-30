@@ -1,24 +1,9 @@
 # load packages
-import pandas as pd
-
-import numpy as np
-
-from datetime import datetime
-from tqdm import tqdm
-from sklearn.metrics import accuracy_score, classification_report
-
 import torch
-import torch.nn.functional as F
-from torch.utils import data
-from torchinfo import summary
 import torch.nn as nn
-import torch.optim as optim
 from torch import nn, einsum
-import torch.nn.functional as F
 from tcn import TemporalConvNet
-from torch.utils.data import WeightedRandomSampler
 from einops import rearrange, repeat
-from einops.layers.torch import Rearrange
 
 class PreNorm(nn.Module):
     def __init__(self, dim, fn):
@@ -157,7 +142,6 @@ class DTNN(nn.Module):
 
         assert pool in {'cls', 'mean'}
         self.pos_embedding = nn.Parameter(torch.zeros(1, time_slices + 1, dim))
-        #self.cls_token = nn.Parameter(torch.ones(1, 1, dim)*1e-3)  # nn.Parameter()定义可学习参数
         self.cls_token = nn.Parameter(torch.randn(1, 1, dim))
         self.dropout = nn.Dropout(emb_dropout)
 
@@ -184,7 +168,7 @@ class DTNN(nn.Module):
         )
 
     def forward(self, x):
-        b, n, _ = x.shape  # b表示batchSize, n表示每个块的空间分辨率, _表示一个块内有多少个值
+        b, n, _ = x.shape 
         x1=self.tcn_emb(x)
         x2=self.tabl_emb(x)
         x=torch.cat((x,x1,x2),dim=2)
@@ -192,11 +176,11 @@ class DTNN(nn.Module):
         for i in reversed(range(1, n)):
             x[:, i, :] = x[:, i, :] - x[:, i - 1, :]
         cls_tokens = repeat(self.cls_token, '() n d -> b n d',
-                            b=b)  # self.cls_token: (1, 1, dim) -> cls_tokens: (batchSize, 1, dim)
-        x = torch.cat((cls_tokens, x), dim=1)  # 将cls_token拼接到patch token中去       (b, n+1, dim)
-        x = x + self.pos_embedding[:, :(n + 1)]  # 加位置嵌入（直接加）      (b, n+1, dim)
+                            b=b) 
+        x = torch.cat((cls_tokens, x), dim=1)  
+        x = x + self.pos_embedding[:, :(n + 1)] 
         x = self.dropout(x)
-        x = self.transformer(x)  # (b, n+1, dim)
+        x = self.transformer(x) 
         x = x.mean(dim=1) if self.pool == 'mean' else x[:, 0]  # (b,dim)
         x = self.to_latent(x)  # Identity (b, dim)
         x = self.mlp_head(x)
@@ -216,7 +200,6 @@ class SVM(nn.Module):
 class MLP(torch.nn.Module):
     def __init__(self, time_slices,dim,num_classes, n_hidden=128):
         super(MLP, self).__init__()
-        # 两层感知机
         self.hidden = torch.nn.Linear(time_slices * dim, n_hidden)
         self.predict = torch.nn.Linear(n_hidden, num_classes)
         self.activation=torch.nn.LeakyReLU()

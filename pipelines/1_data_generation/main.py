@@ -8,6 +8,13 @@ import os
 def read_args():
     parser = argparse.ArgumentParser()
     parser.add_argument(
+        "--data_root",
+        type=str,
+        required = True,
+        help = """(str) Directory where the data files will be written. Should also contain a 
+        directory named 'input', with orderbook and message files in separated directories for each ticker.""",
+    )
+    parser.add_argument(
         "--tickers",
         type=str,
         nargs='+',
@@ -19,16 +26,19 @@ def read_args():
         type=str,
         nargs='+',
         required = True,
-        help = "(list[str]) Returns used to calculate alphas.",
+        help = """(list[str]) List of the types of returns to calculate. Can be 'uniform_mid_returns', 
+        'horizon_mid_returns', 'pit_mid_returns', 'bid_ask_returns', 'ask_bid_returns', 'latency_30_mid_returns',
+        'latency_300_mid_returns', 'latency_3000_mid_returns', 'latency_30_bid_ask_returns',
+        'latency_300_bid_ask_returns', 'latency_3000_bid_ask_returns', 'latency_30_ask_bid_returns',
+        'latency_300_ask_bid_returns' and 'latency_3000_ask_bid_returns'""",
     )
-    
     args = vars(parser.parse_args())
     return args
 
 def main():
     params = read_args()
     print("------------------------- Creating pre-processed data -------------------------")
-    ROOT_DIR = "/home/mp422/data_processing"
+    ROOT_DIR = params["data_root"]
     for TICKER in params["tickers"]:
         input_path = os.path.join(ROOT_DIR, "input", TICKER)
         log_path = os.path.join(ROOT_DIR, "data", "logs", TICKER + "_processing_logs")
@@ -62,7 +72,7 @@ def main():
         aggregate_stats(TICKER, stats_path)
 
     print("------------------------- Creating returns files -------------------------")
-    data_dir = "/home/mp422/data_processing/data"
+    data_dir = os.path.join(ROOT_DIR,"data")
     for TICKER in params["tickers"]:
         ticker_dir = os.path.join(data_dir, TICKER)
         all_files = os.listdir(ticker_dir)

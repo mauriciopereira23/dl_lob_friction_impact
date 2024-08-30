@@ -2,16 +2,20 @@ import argparse
 import os
 from model import deepOB
 import tensorflow as tf
-import datetime as dt
 import random
-import pickle
-from data_methods import get_alphas, get_class_distributions
 import numpy as np
 import time
 
 
 def read_args():
     parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--data_root",
+        type=str,
+        required = True,
+        help = """(str) Directory where the data files will be written. Should also contain a 
+        directory named 'input', with orderbook and message files in separated directories for each ticker.""",
+    )
     parser.add_argument(
         "--device",
         type=int,
@@ -23,7 +27,7 @@ def read_args():
         type=str,
         nargs='+',
         required = True,
-        help = "(list[str]) List of tickers.",
+        help = "(list[str]) List of tickers to generate predictions for.",
     )
     parser.add_argument(
         "--horizons",
@@ -62,7 +66,7 @@ def main():
 
     ## Hardcoded params - start ##
 
-    ROOT_DIR = "/home/mp422/data_processing"
+    ROOT_DIR = params["data_root"]
     Ws = params["windows"]
     
     task = "classification"
@@ -72,12 +76,7 @@ def main():
     T = 100
     
     orderbook_updates = [10, 20, 30, 50, 100, 200, 300, 500, 1000, 10000] 
-    n_horizons = len(orderbook_updates) # number of horizons - only used in multi-level
-    
-    # model_list = ["deepLOB_L1", "deepOF_L1", "deepLOB_L2", "deepOF_L2", "deepVOL_L2", "deepVOL_L3"]
-    # features_list = ["orderbooks", "orderflows", "orderbooks", "orderflows", "volumes", "volumes"]
-    # model_inputs_list = ["orderbooks", "orderflows", "orderbooks", "orderflows", "volumes", "volumes_L3"]
-    # levels_list = [1, 1, 10, 10, 10, 10]
+    n_horizons = len(orderbook_updates)
     
     model_list = ["deepLOB_L2","deepOF_L2","deepVOL_L2"]
     features_list = ["orderbooks", "orderflows","volumes"]
@@ -154,8 +153,6 @@ def main():
                 
                     window_filepath = os.path.join(TICKER_filepath, "W" + str(window))
                     os.makedirs(window_filepath, exist_ok=True)
-                    # pickle.dump([val_dates, train_dates, test_dates], open(os.path.join(window_filepath, "val_train_test_dates.pkl"), "wb"))
-                
                     
     
                     for label_dict in label_dicts:
@@ -180,18 +177,9 @@ def main():
                             "test": [os.path.join(data_dir, file) for date in test_dates for file in file_list if date in file]
                         }
 
-                        # print("getting alphas...")
-                        # alphas, distributions = get_alphas(returns_files["train"], orderbook_updates)
-                        # pickle.dump(alphas, open(os.path.join(window_filepath, "alphas.pkl"), "wb"))
-                        # pickle.dump(distributions, open(os.path.join(window_filepath, "distributions.pkl"), "wb"))
-                        # imbalances = distributions.to_numpy()
                         alphas = np.zeros(n_horizons)
                         imbalances = None
     
-                        
-                        # val_distributions = get_class_distributions(returns_files["val"], alphas, orderbook_updates)
-                        # pickle.dump(val_distributions, open(os.path.join(window_filepath, "val_distributions.pkl"), "wb"))
-                        
                         for test_label in label_dict["test_labels"]:
             
                             test_returns_data_dir = os.path.join(ROOT_DIR, "data", TICKER, test_label)
@@ -201,9 +189,6 @@ def main():
 
                             returns_files["test"] = [os.path.join(test_returns_data_dir, file) for date in test_dates for file in test_returns_file_list if date in file]
 
-                            # test_distributions = get_class_distributions(returns_files["test"], alphas, orderbook_updates)
-                            # pickle.dump(test_distributions, open(os.path.join(window_filepath + "test_distributions.pkl"), "wb"))
-                            
                         
                             # iterate through horizons
                             for horizon in params["horizons"]:
