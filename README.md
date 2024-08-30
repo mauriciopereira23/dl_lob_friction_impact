@@ -1,4 +1,4 @@
-# dl_lob_friction_impact
+# Deep learning in order book markets: the impact of market frictions on return predictability
 Repository dedicated to contain the code used for the master thesis: "Deep learning in order book markets: the impact of market frictions on return predictability", by Mauricio Pereira da Silva Filho, as part of the requirements for the Msc. in Machine Learning and Data Science at Imperial College London.
 
 The repository contains code used to:
@@ -17,3 +17,5 @@ of returns in order book markets: a deep learning perspective, 2023. Git reposit
 frequency stock movement with differential transformer neural network. Electronics,
 12(13), 2023. ISSN 2079-9292. doi: 10.3390/electronics12132943. URL [https://www.
 mdpi.com/2079-9292/12/13/2943](https://mdpi.com/2079-9292/12/13/2943). Git repository: [https://github.com/j00000ker/DTNN/tree/main](https://github.com/j00000ker/DTNN/tree/main)
+
+## Step-by-step to run
